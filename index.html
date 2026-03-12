@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
+    <title>Offline 3D Viewer</title>
+
+    <script type="module" src="./js/model-viewer.min.js"></script>
+
+    <style>
+      body {
+        margin: 0;
+        background-color: #ffffff;
+        overflow: hidden;
+      }
+      model-viewer {
+        width: 100vw;
+        height: 100vh;
+        --poster-color: transparent;
+      }
+      .tracker-dot {
+        width: 24px;
+        height: 24px;
+        background-color: red;
+        border: 3px solid white;
+        border-radius: 50%;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+        transform: translate(-50%, -50%);
+        transition: transform 0.2s;
+      }
+
+      /* 로딩 UI 스타일 */
+      #loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: #ffffff;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease;
+      }
+
+      .loading-text {
+        font-family: sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        color: #333333;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loading-overlay">
+      <div class="loading-text">Loading...</div>
+    </div>
+
+    <model-viewer
+      id="viewer"
+      src="./model.glb"
+      camera-controls
+      tone-mapping="aces-filmic"
+      exposure="1.0"
+      shadow-intensity="1"
+      autoplay
+      interaction-prompt="none"
+    >
+      <button
+        class="tracker-dot"
+        slot="hotspot-1"
+        data-surface="9 0 243 251 280 0.206 0.527 0.267"
+        data-visibility-attribute="visible"
+      ></button>
+    </model-viewer>
+
+    <script>
+      // 2. 서비스 워커 등록
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then(
+            (registration) => {
+              console.log('SW registered');
+            },
+            (err) => {
+              console.log('SW failed');
+            },
+          );
+        });
+      }
+
+      const viewer = document.querySelector('#viewer');
+      const hotspot = document.querySelector('.tracker-dot');
+      const loadingOverlay = document.querySelector('#loading-overlay');
+
+      let isOpened = true; // 초기 상태: 열려있음
+
+      // --- 프로그래스 로직 (로딩 화면) ---
+      viewer.addEventListener('progress', (event) => {
+        const progress = Math.round(event.detail.totalProgress * 100);
+        if (progress === 100) {
+          setTimeout(() => {
+            loadingOverlay.style.opacity = '0';
+            setTimeout(() => {
+              loadingOverlay.style.display = 'none';
+            }, 500);
+          }, 2000); // 2초 대기 후 화면 밝힘
+        }
+      });
+
+      // --- 💡 수정된 애니메이션 초기화 로직 ---
+      viewer.addEventListener('load', () => {
+        if (viewer.availableAnimations.length > 0) {
+          // 1. 시간을 먼저 애니메이션 끝으로 이동시킵니다.
+          viewer.currentTime = viewer.duration - 0.05;
+
+          // 2. 엔진을 살짝 깨워서 핫스팟의 화면상 위치를 뚜껑 위치로 강제 갱신시킵니다!
+          viewer.play();
+
+          // 3. 한 프레임만 렌더링하고(위치 갱신 완료) 즉시 일시정지시킵니다.
+          requestAnimationFrame(() => {
+            viewer.pause();
+          });
+        }
+      });
+
+      // --- 클릭 애니메이션 로직 ---
+      hotspot.addEventListener('click', () => {
+        isOpened = !isOpened;
+        const duration = viewer.duration;
+
+        viewer.timeScale = isOpened ? 1 : -1;
+        viewer.play();
+
+        function checkBounds() {
+          if (viewer.timeScale === 1 && viewer.currentTime >= duration - 0.05) {
+            viewer.currentTime = duration - 0.05;
+            viewer.pause();
+            return;
+          }
+          if (viewer.timeScale === -1 && viewer.currentTime <= 0.02) {
+            viewer.currentTime = 0;
+            viewer.pause();
+            return;
+          }
+          requestAnimationFrame(checkBounds);
+        }
+
+        requestAnimationFrame(checkBounds);
+      });
+    </script>
+  </body>
+</html>
