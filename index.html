@@ -117,7 +117,7 @@
       viewer.addEventListener('load', () => {
         if (viewer.availableAnimations.length > 0) {
           // 1. 시간을 먼저 애니메이션 끝으로 이동시킵니다.
-          viewer.currentTime = viewer.duration - 0.05;
+          viewer.currentTime = viewer.duration - 0.1;
 
           // 2. 엔진을 살짝 깨워서 핫스팟의 화면상 위치를 뚜껑 위치로 강제 갱신시킵니다!
           viewer.play();
@@ -138,8 +138,8 @@
         viewer.play();
 
         function checkBounds() {
-          if (viewer.timeScale === 1 && viewer.currentTime >= duration - 0.05) {
-            viewer.currentTime = duration - 0.05;
+          if (viewer.timeScale === 1 && viewer.currentTime >= duration - 0.1) {
+            viewer.currentTime = duration - 0.1;
             viewer.pause();
             return;
           }
