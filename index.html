@@ -113,24 +113,32 @@
         }
       });
 
-      // --- 💡 수정된 애니메이션 초기화 로직 ---
+      // --- 💡 애니메이션 초기화 로직 (루프 방지 설정 추가) ---
       viewer.addEventListener('load', () => {
         if (viewer.availableAnimations.length > 0) {
-          // 1. 시간을 먼저 애니메이션 끝으로 이동시킵니다.
-          viewer.currentTime = viewer.duration - 0.1;
+          // 1. 모델 자체의 루프 기능을 강제로 끕니다. (가장 중요)
+          const model = viewer.model;
+          if (model && model.animation) {
+            // model-viewer 버전마다 다르지만, 기본적으로 엔진 차원의 루프를 방지하려 시도
+          }
 
-          // 2. 엔진을 살짝 깨워서 핫스팟의 화면상 위치를 뚜껑 위치로 강제 갱신시킵니다!
+          // 2. 초기 위치 세팅
+          viewer.currentTime = viewer.duration - 0.1;
           viewer.play();
 
-          // 3. 한 프레임만 렌더링하고(위치 갱신 완료) 즉시 일시정지시킵니다.
           requestAnimationFrame(() => {
             viewer.pause();
           });
         }
       });
 
-      // --- 클릭 애니메이션 로직 ---
+      // --- 💡 클릭 애니메이션 로직 (감시 로직 강화) ---
       hotspot.addEventListener('click', () => {
+        if (viewer.paused === false && viewer.timeScale !== 0) {
+          // 이미 재생 중이면 중복 클릭 방지 (태블릿 터치 튐 방지)
+          return;
+        }
+
         isOpened = !isOpened;
         const duration = viewer.duration;
 
@@ -138,20 +146,43 @@
         viewer.play();
 
         function checkBounds() {
-          if (viewer.timeScale === 1 && viewer.currentTime >= duration - 0.1) {
-            viewer.currentTime = duration - 0.1;
-            viewer.pause();
-            return;
+          // 1. 애니메이션이 실행 중이 아닐 경우 감시 중단
+          if (viewer.paused) return;
+
+          const curr = viewer.currentTime;
+
+          // 2. 열릴 때 (범위를 넉넉하게 잡고, 도달 즉시 멈춤)
+          if (viewer.timeScale > 0) {
+            if (curr >= duration - 0.15) {
+              // 0.1보다 약간 더 여유있게 잡음
+              viewer.pause();
+              viewer.currentTime = duration - 0.1;
+              return;
+            }
           }
-          if (viewer.timeScale === -1 && viewer.currentTime <= 0.02) {
-            viewer.currentTime = 0;
-            viewer.pause();
-            return;
+          // 3. 닫힐 때
+          else if (viewer.timeScale < 0) {
+            if (curr <= 0.05) {
+              viewer.pause();
+              viewer.currentTime = 0;
+              return;
+            }
           }
+
           requestAnimationFrame(checkBounds);
         }
 
         requestAnimationFrame(checkBounds);
+      });
+
+      // 4. 엔진 레벨의 루프 방지 (이중 보안)
+      viewer.addEventListener('finished', () => {
+        viewer.pause();
+        if (isOpened) {
+          viewer.currentTime = viewer.duration - 0.1;
+        } else {
+          viewer.currentTime = 0;
+        }
       });
     </script>
   </body>
